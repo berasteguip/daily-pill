@@ -1,9 +1,12 @@
-name: Run Python script
+name: Run Python script and persist history
 
 on:
   schedule:
-    - cron: "*/5 * * * *"     # cada 5 minutos
-  workflow_dispatch:       # permite lanzarlo manualmente desde GitHub UI
+    - cron: "*/5 * * * *"   # every 5 minutes
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   run:
@@ -12,6 +15,10 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -23,5 +30,24 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+      - name: Ensure history file exists
+        run: |
+          if [ ! -f history.txt ]; then
+            touch history.txt
+          fi
+
       - name: Run script
         run: python script.py
+
+      - name: Commit and push history
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add history.txt
+
+          # If no changes, do not fail the job
+          git diff --cached --quiet && exit 0
+
+          git commit -m "Update history.txt"
+          git push
