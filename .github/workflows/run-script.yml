@@ -37,7 +37,8 @@ jobs:
           fi
 
       - name: Run script
-        run: python src/main.py
+        working-directory: ./src
+        run: python main.py
 
       - name: Commit and push history
         run: |
