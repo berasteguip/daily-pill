@@ -1,4 +1,13 @@
 import requests
+import socket
+import urllib3.util.connection as urllib3_cn
+
+# Patch urllib3 to force IPv4. This fixes "Network is unreachable" errors
+# that occur in some GitHub Actions environments with Telegram.
+def allowed_gai_family():
+    return socket.AF_INET
+
+urllib3_cn.allowed_gai_family = allowed_gai_family
 
 TELEGRAM_BOT_TOKEN = "7887912607:AAHCb_NroXLTYQGiC7phlXSohxRkQsrRTvI"
 TELEGRAM_CHAT_ID = "8192002884"
