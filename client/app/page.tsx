@@ -61,6 +61,8 @@ export default function Home() {
     </div>
   );
 
+  if (!pill) return null;
+
   return (
     <main className="min-h-screen bg-gray-100 py-10 px-4 flex items-center justify-center">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
