@@ -1,114 +1,118 @@
-# src/api.py
-from fastapi import FastAPI, HTTPException
-from src import chat
-import pandas as pd
-import random
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
+from supabase import create_client, Client
+from src.chat import Chat
 import os
+import random
+from dotenv import load_dotenv
+from typing import Optional
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="DailyPill API")
+# Cargar credenciales
+load_dotenv()
 
-# Cargamos los paths igual que en tu main.py
-TOPICS_DIR = 'material/topics' 
+app = FastAPI(title="DailyPill API v3 (Multi-User)")
 
-def set_prompt(topic: str, title: str, content: str) -> str:
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permite que cualquiera (tu web) llame a la API
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite GET, POST, etc.
+    allow_headers=["*"],
+)
+
+# Conexión a Supabase
+url: str = os.getenv("SUPABASE_URL")
+key: str = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(url, key)
+
+chat_bot = Chat()
+
+class PillResponse(BaseModel):
+    topic: str
+    title: str
+    content: str
+    generated_text: str
+    remaining_pills: int  # Dato útil para saber si se nos acaba el contenido
+
+def build_prompt(topic: str, title: str, subtitle: str) -> str:
+    """Misma función de prompt."""
     return f"""# ROL
-    Actúa como un experto divulgador cultural y creador de contenido de "micro-learning". Tu especialidad es sintetizar conceptos complejos o historias fascinantes en textos muy breves y adictivos.
+    Actúa como un experto divulgador cultural.
     
     # TAREA
-    Redacta una "Píldora de Conocimiento Diaria" basada en los siguientes parámetros que te proporciono:
+    Redacta una "Píldora de Conocimiento Diaria" basada en:
+    1. TEMA: {topic}
+    2. TÍTULO: {title}
+    3. SUBTÍTULO: {subtitle}
     
-    1. TEMA GENERAL (Contexto): {topic}
-    2. TÍTULO (El Gancho): {title}
-    3. SUBTÍTULO (El Enfoque Específico): {content}
+    # INSTRUCCIONES
+    - Gancho impactante.
+    - Explicación ELI5 (sencilla).
+    - Cierre reflexivo.
+    - Máximo 75 palabras. Sin saludos.
     
-    # INSTRUCCIONES DE REDACCIÓN
-    - **El Gancho:** Empieza directamente con el dato más impactante, una pregunta retórica o una afirmación contraintuitiva relacionada con el "Subtítulo".
-    - **El Cuerpo:** Explica el "por qué" o el "cómo" de forma rigurosa pero sencilla (ELI5 - Explícamelo como si tuviera 5 años).
-    - **El Cierre:** Una frase final que deje una reflexión o cierre la curiosidad.
-    - **Tono:** Cercano, fascinante, educativo y dinámico.
-    - **Restricción:** La extensión total debe estar entre 75 y 100 palabras MÁXIMO. No saludes, no te despidas, ve directo al grano.
-    
-    # FORMATO DE SALIDA
-    Solo devuelve el texto de la píldora."""
-
-def get_random_pending_pill():
-    """
-    Busca todas las píldoras con Estado='pending' en todos los CSVs
-    y devuelve una al azar junto con el nombre del archivo para actualizarla.
-    """
-    pending_pills = []
-    
-    # 1. Cargar todos los temas pendientes
-    if not os.path.exists(TOPICS_DIR):
-        return None, "Error: No se encontró el directorio de topics."
-
-    files = [f for f in os.listdir(TOPICS_DIR) if f.endswith('.csv')]
-    
-    for file in files:
-        try:
-            path = os.path.join(TOPICS_DIR, file)
-            df = pd.read_csv(path)
-            
-            # Verificar columnas necesarias
-            if 'Estado' in df.columns and 'id' in df.columns and 'Titulo' in df.columns and 'Contenido' in df.columns:
-                pending = df[df['Estado'] == 'pending']
-                for _, row in pending.iterrows():
-                    pending_pills.append({
-                        'file': file,
-                        'id': row['id'],
-                        'Titulo': row['Titulo'],
-                        'Contenido': row['Contenido'],
-                        'Topic': file.replace('.csv', '') # Usamos el nombre del archivo como tema general
-                    })
-        except Exception as e:
-            print(f"Error leyendo {file}: {e}")
-            continue
-
-    # 2. Elegir una al azar
-    if not pending_pills:
-        return None, "No quedan temas nuevos disponibles (todos están 'sent' o no hay archivos)."
-
-    return random.choice(pending_pills), None
-
-def mark_as_sent(filename, pill_id):
-    path = os.path.join(TOPICS_DIR, filename)
-    df = pd.read_csv(path)
-    df.loc[df['id'] == pill_id, 'Estado'] = 'sent'
-    df.to_csv(path, index=False)
+    # OUTPUT
+    Solo el texto de la píldora."""
 
 @app.get("/")
 def read_root():
-    return {"message": "Bienvenido a DailyPill API v1"}
+    return {"message": "DailyPill API v3 is ready for users 👥"}
 
-@app.get("/daily-pill")
-def get_daily_pill():
-    """
-    Endpoint principal. Genera una píldora bajo demanda y la marca como enviada.
-    """
-    # 1. Elegimos píldora pendiente
-    pill_data, error = get_random_pending_pill()
-    
-    if error:
-        raise HTTPException(status_code=500, detail=error)
-    
-    # 2. Generamos el prompt
-    prompt = set_prompt(pill_data['Topic'], pill_data['Titulo'], pill_data['Contenido'])
-
-    # 3. Generamos contenido con Gemini
+@app.get("/daily-pill", response_model=PillResponse)
+def get_daily_pill(user_id: str = Query(..., description="UUID del usuario")):
     try:
-        chat_instance = chat.Chat() # Instanciamos Chat
-        pill_content = chat_instance.get_response(prompt)
+        # 1. Obtener el historial de ESTE usuario
+        # "Dame los IDs de las píldoras que este usuario ya vio"
+        seen_response = supabase.table("user_progress").select("pill_id").eq("user_id", user_id).execute()
+        seen_ids = [record['pill_id'] for record in seen_response.data]
+
+        # 2. Consultar píldoras disponibles (Excluyendo las vistas)
+        # Nota: La sintaxis .not_.in_ filtra lo que NO está en la lista
+        query = supabase.table("pills").select("*")
         
-        # 4. Marcamos como 'sent' AHORA
-        mark_as_sent(pill_data['file'], pill_data['id'])
+        if seen_ids:
+            query = query.not_.in_("id", seen_ids)
+            
+        # Traemos una muestra (ej. 10) para aleatorizar
+        pills_response = query.limit(10).execute()
+        available_pills = pills_response.data
+
+        if not available_pills:
+            # Caso borde: ¡El usuario se ha leído todo!
+            raise HTTPException(status_code=404, detail="¡Increíble! Has completado todas las píldoras disponibles por ahora.")
+
+        # 3. Elegir una al azar
+        selected_pill = random.choice(available_pills)
+        
+        # 4. Registrar la visita (MARCAR COMO VISTA)
+        # Esto evita que se le vuelva a mostrar a ESTE usuario
+        supabase.table("user_progress").insert({
+            "user_id": user_id,
+            "pill_id": selected_pill['id']
+        }).execute()
+
+        # 5. Generar contenido con IA
+        prompt = build_prompt(
+            topic=selected_pill['category'],
+            title=selected_pill['title'],
+            subtitle=selected_pill['content']
+        )
+        
+        generated_text = chat_bot.get_response(prompt)
         
         return {
-            "topic": pill_data['Topic'],
-            "title": pill_data['Titulo'],
-            "content": pill_content,
-            "original_file": pill_data['file']
+            "topic": selected_pill['category'],
+            "title": selected_pill['title'],
+            "content": selected_pill['content'],
+            "generated_text": generated_text,
+            "remaining_pills": len(available_pills) - 1 # Solo informativo
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-# Para correrlo: uvicorn src.api:app --reload
+    except Exception as e:
+        print(f"Error: {e}")
+        # Si el error es de formato de UUID, damos una pista
+        if "uuid" in str(e).lower():
+            raise HTTPException(status_code=400, detail="El ID de usuario no es válido. Asegúrate de usar el UUID de Supabase.")
+        raise HTTPException(status_code=500, detail=str(e))

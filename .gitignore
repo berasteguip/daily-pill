@@ -1,0 +1,28 @@
+# --- SEGURIDAD (¡Lo más importante!) ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+# Virtual Environments
+venv/
+env/
+.venv/
+
+# --- Node.js / Next.js (Frontend) ---
+client/node_modules/
+client/.next/
+client/out/
+client/build/
+client/.vercel/
+client/*.log
+
+# --- Sistema Operativo ---
+.DS_Store
+Thumbs.db
