@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 export default function Home() {
   const [pill, setPill] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // 1. GESTIÓN DE IDENTIDAD (Simple)
