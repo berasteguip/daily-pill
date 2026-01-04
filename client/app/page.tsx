@@ -34,7 +34,8 @@ export default function Home() {
         const data = await res.json();
         setPill(data);
       } catch (err) {
-        setError(err.message);
+        // Le decimos: "Trata esto como un Error"
+        setError((err as Error).message);
       } finally {
         setLoading(false);
       }
