@@ -2,8 +2,17 @@
 
 import { useState, useEffect } from 'react';
 
+// Definimos qué forma tiene una "Píldora"
+interface Pill {
+  topic: string;
+  title: string;
+  content: string;
+  generated_text: string;
+  remaining_pills: number;
+}
+
 export default function Home() {
-  const [pill, setPill] = useState(null);
+  const [pill, setPill] = useState<Pill | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
