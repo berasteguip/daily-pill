@@ -101,14 +101,6 @@ export default function Home() {
             {pill.generated_text}
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-between items-center">
-            <span className="text-xs text-gray-400">DailyPill AI ©</span>
-            <span className="text-xs font-mono text-blue-500 bg-blue-50 px-2 py-1 rounded">
-                Píldoras restantes: {pill.remaining_pills}
-            </span>
-        </div>
       </div>
     </main>
   );
