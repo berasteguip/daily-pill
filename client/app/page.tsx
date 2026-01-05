@@ -115,8 +115,8 @@ export default function Home() {
 }
 
 // Función auxiliar para colores según categoría
-function getCategoryColor(topic) {
-  const colors = {
+function getCategoryColor(topic: string) {
+  const colors: Record<string, string> = {
     history: 'bg-amber-600',
     science_tech: 'bg-blue-600',
     art_culture: 'bg-purple-600',
