@@ -1,7 +1,12 @@
+import os
+import pytest
 import requests
 
-TELEGRAM_BOT_TOKEN = "7887912607:AAHCb_NroXLTYQGiC7phlXSohxRkQsrRTvI"
-TELEGRAM_CHAT_ID = "8192002884"
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+    pytest.skip("Telegram credentials not set, skipping sender test", allow_module_level=True)
 
 def send(text: str) -> None:
     token = TELEGRAM_BOT_TOKEN

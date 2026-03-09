@@ -9,8 +9,15 @@ def allowed_gai_family():
 
 urllib3_cn.allowed_gai_family = allowed_gai_family
 
-TELEGRAM_BOT_TOKEN = "7887912607:AAHCb_NroXLTYQGiC7phlXSohxRkQsrRTvI"
-TELEGRAM_CHAT_ID = "8192002884"
+import os
+
+# Tokens and IDs are pulled from environment variables. Add them to a
+# .env file (see .env.example) or export them in your shell.
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+    raise RuntimeError("Telegram bot token or chat id not set in environment")
 
 class Sender:
     def __init__(self):

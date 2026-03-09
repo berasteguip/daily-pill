@@ -1,8 +1,13 @@
+import os
 from google import genai
 from datetime import datetime, timezone
 import pandas as pd
 
-API_KEY = "AIzaSyAy4uOF8EfEMZ2SjRv01cXaUcNELQv8Q3w"
+# Read the API key from environment for security. Set GENAI_API_KEY in a
+# .env file or in your environment before running.
+API_KEY = os.getenv("GENAI_API_KEY")
+if not API_KEY:
+    raise RuntimeError("GENAI_API_KEY environment variable not set")
 
 class Chat:
     def __init__(self):

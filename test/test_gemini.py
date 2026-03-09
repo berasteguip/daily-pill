@@ -1,7 +1,13 @@
 import os
+import pytest
 from google import genai
 
-API_KEY = "AIzaSyAy4uOF8EfEMZ2SjRv01cXaUcNELQv8Q3w"
+# read key from environment; skip the test if it's missing
+API_KEY = os.getenv("GENAI_API_KEY")
+
+if not API_KEY:
+    pytest.skip("GENAI_API_KEY not set, skipping Gemini integration test", allow_module_level=True)
+
 
 def main() -> None:
     # Si prefieres, puedes pasar la key explícitamente:
