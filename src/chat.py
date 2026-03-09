@@ -15,12 +15,15 @@ class Chat:
 
     def get_response(self, prompt: str) -> str:
         
-        resp = self.client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
-        
-        return resp.text
+        # resp = self.client.models.generate_content(
+        #     model="gemini-2.5-flash",
+        #     contents=prompt,
+        # )
+
+
+        # return resp.text
+
+        return "Probando"
 
         
         
