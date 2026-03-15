@@ -19,6 +19,7 @@ Redacta una "Píldora de Conocimiento Diaria" basada en:
 - Explicación ELI5 (sencilla).
 - Cierre reflexivo.
 - Máximo 75 palabras. Sin saludos.
+- IMPORTANTE: Escribe SOLO EN TEXTO PLANO. Prohibido usar Markdown, prohibido usar asteriscos (*), prohibido usar cursivas, negritas o subrayados.
 
 # OUTPUT
 Solo el texto de la píldora.`;

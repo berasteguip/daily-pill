@@ -146,21 +146,18 @@ export default function Home() {
           <div className="w-12 h-1 bg-gray-200 mb-8 rounded-full"></div>
 
           {/* Generated text */}
-          <div className="prose prose-gray max-w-none text-gray-800 text-lg leading-relaxed">
+          <div className="prose prose-gray max-w-none text-gray-800 text-lg leading-relaxed text-justify">
             <p>{pill.generated_text}</p>
           </div>
 
           {/* Footer controls */}
-          <div className="mt-12 pt-6 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <span className="text-gray-400 text-sm">
-              Quedan {pill.remaining_pills} píldoras por descubrir
-            </span>
+          <div className="mt-12 pt-8 border-t border-gray-100 flex justify-center">
             <button
               id="btn-next-pill"
               onClick={fetchPill}
-              className="px-6 py-2.5 bg-black hover:bg-gray-800 text-white text-sm font-medium rounded-md transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black"
+              className="px-8 py-3.5 bg-black hover:bg-gray-800 text-white text-base font-semibold rounded-lg transition-colors shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black w-full sm:w-auto"
             >
-              Siguiente píldora →
+              Siguiente píldora
             </button>
           </div>
         </div>
