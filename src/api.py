@@ -1,15 +1,16 @@
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from supabase import create_client, Client
-from src.chat import Chat
 import os
 import random
 from dotenv import load_dotenv
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 
-# Cargar credenciales
+# Cargar credenciales antes de importar modulos que dependen de env vars.
 load_dotenv()
+
+from src.chat import Chat
 
 app = FastAPI(title="DailyPill API v3 (Multi-User)")
 

@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "DailyPill — Tu dosis diaria de conocimiento",
+  title: "DailyPill",
   description: "Aprende algo nuevo cada día con píldoras de conocimiento personalizadas.",
   icons: {
     icon: "/icon",
