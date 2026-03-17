@@ -10,6 +10,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "DailyPill — Tu dosis diaria de conocimiento",
   description: "Aprende algo nuevo cada día con píldoras de conocimiento personalizadas.",
+  icons: {
+    icon: "/icon",
+  },
 };
 
 export default function RootLayout({

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { PILL_EMOJI } from '@/lib/branding';
 import { useRouter } from 'next/navigation';
 
 interface Pill {
@@ -74,7 +75,7 @@ export default function Home() {
   if (loading) return (
     <div className="flex h-screen items-center justify-center bg-white font-sans text-gray-900">
       <div className="text-center">
-        <div className="text-4xl mb-4 animate-bounce">💊</div>
+        <div className="text-4xl mb-4 animate-bounce">{PILL_EMOJI}</div>
         <p className="text-gray-500 text-sm font-medium animate-pulse">Generando nueva píldora...</p>
       </div>
     </div>
@@ -107,7 +108,7 @@ export default function Home() {
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 py-4 max-w-3xl mx-auto w-full border-b border-gray-100">
         <span className="font-bold text-lg tracking-tight flex items-center gap-2">
-          <span>💊</span> DailyPill
+          <span>{PILL_EMOJI}</span> DailyPill
         </span>
         <div className="flex items-center gap-4">
           {userEmail && (
