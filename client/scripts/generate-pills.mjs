@@ -18,7 +18,7 @@ function parseArgs(argv) {
     count: null,
     loop: false,
     intervalMs: DEFAULT_INTERVAL_MS,
-    retryFailed: false,
+    retryFailed: true,
     help: false,
   };
 
