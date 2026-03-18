@@ -67,12 +67,13 @@ export async function GET() {
     });
 
     // 6. Generar texto con Gemini
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
     const prompt = buildPrompt(selected.category, selected.title, selected.content);
     const result = await model.generateContent(prompt);
     const generatedText = result.response.text();
 
     return NextResponse.json({
+      pill_id: selected.id,
       topic: selected.category,
       title: selected.title,
       content: selected.content,
