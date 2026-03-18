@@ -1,6 +1,13 @@
 ﻿'use client';
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type TouchEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type TouchEvent,
+} from 'react';
 
 export interface ChatMessage {
   id: string;
@@ -79,7 +86,7 @@ export default function PillChatSheet({
       return;
     }
 
-    const handleEscape = (event: KeyboardEvent) => {
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') {
         handleClose();
       }
@@ -112,7 +119,7 @@ export default function PillChatSheet({
     setDraft('');
   };
 
-  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       handleSubmit();

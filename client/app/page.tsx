@@ -193,12 +193,16 @@ export default function Home() {
     const token = chatSessionTokenRef.current;
     const pillKey = getPillKey(pill.pill_id);
 
-    let conversationId = conversationByPill[pillKey] ?? null;
+    let conversationId: string | null = conversationByPill[pillKey] ?? null;
     if (!conversationId) {
       conversationId = await hydrateConversation(pill);
       if (!conversationId || chatSessionTokenRef.current !== token) {
         return;
       }
+    }
+
+    if (!conversationId) {
+      return;
     }
 
     pushMessage(pillKey, createChatMessage('user', text));
