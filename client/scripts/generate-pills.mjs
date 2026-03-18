@@ -229,24 +229,23 @@ async function fetchNextCandidate(supabase, retryFailed, attemptedIds) {
 
 function buildPrompt(pill) {
   return `# ROL
-Actua como un experto divulgador cultural y creador de contenido de micro-learning.
+Actúa como un experto divulgador cultural.
 
 # TAREA
-Redacta una "Pildora de Conocimiento Diaria" con estos datos:
-- Tema general: ${pill.category}
-- Titulo: ${pill.title}
-- Subtitulo: ${pill.content}
+Redacta una "Píldora de Conocimiento Diaria" basada en:
+1. TEMA: ${topic}
+2. TÍTULO: ${title}
+3. SUBTÍTULO: ${subtitle}
 
 # INSTRUCCIONES
-- Empieza con el dato mas impactante, una pregunta retorica o una afirmacion contraintuitiva.
-- Explica el porque o el como con rigor, pero de forma sencilla.
-- Cierra con una frase breve que deje reflexion o curiosidad.
-- Escribe en espanol.
-- Usa texto plano, sin Markdown, sin asteriscos y sin listas.
-- Extension objetivo: entre 50 y 75 palabras.
+- Gancho impactante.
+- Explicación ELI5 (sencilla).
+- Cierre reflexivo.
+- Máximo 75 palabras. Sin saludos.
+- IMPORTANTE: Escribe SOLO EN TEXTO PLANO. Prohibido usar Markdown, prohibido usar asteriscos (*), prohibido usar cursivas, negritas o subrayados.
 
-# SALIDA
-Devuelve solo el texto final de la pildora.`;
+# OUTPUT
+Solo el texto de la píldora.`;
 }
 
 async function generateWithOllama(config, prompt) {
