@@ -233,9 +233,9 @@ Actúa como un experto divulgador cultural.
 
 # TAREA
 Redacta una "Píldora de Conocimiento Diaria" basada en:
-1. TEMA: ${topic}
-2. TÍTULO: ${title}
-3. SUBTÍTULO: ${subtitle}
+1. TEMA: ${pill.category}
+2. TÍTULO: ${pill.title}
+3. SUBTÍTULO: ${pill.content}
 
 # INSTRUCCIONES
 - Gancho impactante.
