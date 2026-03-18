@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "pills:generate": "node scripts/generate-pills.mjs",
+    "pills:generate:loop": "node scripts/generate-pills.mjs --loop"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

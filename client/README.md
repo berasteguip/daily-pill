@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DailyPill Client
 
-## Getting Started
+Frontend en Next.js con Supabase para autenticacion, entrega de pildoras y chat contextual. Tambien incluye el script batch local que genera contenido de pildoras con Ollama y lo persiste en `public.pill_contents`.
 
-First, run the development server:
+## Entorno
+
+Crea `client/.env.local` a partir de [`.env.local.example`](.env.local.example).
+
+Variables principales:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `GENAI_API_KEY`
+- `GENAI_MODEL`
+- `GENAI_FALLBACK_MODELS`
+- `OLLAMA_BASE_URL`
+- `OLLAMA_MODEL`
+- `PILL_PROMPT_VERSION`
+
+## Frontend
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## SQL recomendado
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Ejecuta la auditoria previa:
+   - [`supabase/audit/001_pill_generation_audit.sql`](supabase/audit/001_pill_generation_audit.sql)
+2. Aplica migraciones:
+   - [`supabase/migrations/001_auth_users.sql`](supabase/migrations/001_auth_users.sql)
+   - [`supabase/migrations/002_chat_llm.sql`](supabase/migrations/002_chat_llm.sql)
+   - [`supabase/migrations/003_pill_contents.sql`](supabase/migrations/003_pill_contents.sql)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Batch con Ollama
 
-## Learn More
+Genera una cantidad fija:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run pills:generate -- --count 10
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Reintenta fallidas:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run pills:generate -- --count 20 --retry-failed
+```
 
-## Deploy on Vercel
+Modo loop:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run pills:generate -- --loop --interval-ms 3000
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Atajo equivalente:
+
+```bash
+npm run pills:generate:loop
+```
+
+El script:
+
+- lee `public.pills` en orden por `id`
+- considera pendiente toda pildora sin fila en `public.pill_contents`
+- opcionalmente reprocesa filas con `status='failed'`
+- guarda una unica version vigente por `pill_id`
