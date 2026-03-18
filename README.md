@@ -1,28 +1,28 @@
-# Daily Pill
+﻿# DailyPill
 
-## Configuration
+Aplicación web en Next.js (carpeta `client/`) con Supabase y Gemini.
 
-Secrets and API keys should be stored in environment variables rather than
-hardcoded in source.  A template is provided in `.env.example`:
+## Estructura actual
 
-```text
-GENAI_API_KEY=your_google_genai_key_here
-TELEGRAM_BOT_TOKEN=123456:ABCDEF...
-TELEGRAM_CHAT_ID=8192002884
-```
+- `client/`: frontend + API routes de Next.js
+- `client/supabase/migrations/`: migraciones SQL activas
+  - `001_auth_users.sql`
+  - `002_chat_llm.sql`
 
-Copy the example to `.env` and fill in the values.  The `.env` file is
-already listed in `.gitignore` so it will not be committed.
+## Puesta en marcha (frontend)
 
-When running from a shell you can either use a library such as
-`python-dotenv` to load the `.env` file or export the variables manually:
+1. Configura variables de entorno en `client/.env.local` (puedes partir de `client/.env.local.example`).
+2. Instala dependencias y arranca:
 
 ```bash
-export GENAI_API_KEY=...
-export TELEGRAM_BOT_TOKEN=...
-export TELEGRAM_CHAT_ID=...
+cd client
+npm install
+npm run dev
 ```
 
-The Python modules in `src/` read the variables at import time and will raise
-an error if they are missing.  The tests also skip themselves when credentials
-are absent.
+## Base de datos
+
+Ejecuta las migraciones SQL en Supabase SQL Editor en este orden:
+
+1. `client/supabase/migrations/001_auth_users.sql`
+2. `client/supabase/migrations/002_chat_llm.sql`
