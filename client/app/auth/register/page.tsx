@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -12,8 +12,33 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncSession = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (isMounted && user) {
+          router.replace('/');
+        }
+      } catch (error) {
+        console.warn('[auth/register] session check warning:', error);
+      }
+    };
+
+    void syncSession();
+
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,84 +1,101 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GENAI_API_KEY!);
+interface PillRow {
+  id: number;
+  title: string;
+  content: string;
+  category: string;
+}
 
-function buildPrompt(topic: string, title: string, subtitle: string): string {
-  return `# ROL
-Actúa como un experto divulgador cultural.
-
-# TAREA
-Redacta una "Píldora de Conocimiento Diaria" basada en:
-1. TEMA: ${topic}
-2. TÍTULO: ${title}
-3. SUBTÍTULO: ${subtitle}
-
-# INSTRUCCIONES
-- Gancho impactante.
-- Explicación ELI5 (sencilla).
-- Cierre reflexivo.
-- Máximo 75 palabras. Sin saludos.
-- IMPORTANTE: Escribe SOLO EN TEXTO PLANO. Prohibido usar Markdown, prohibido usar asteriscos (*), prohibido usar cursivas, negritas o subrayados.
-
-# OUTPUT
-Solo el texto de la píldora.`;
+interface ReadyPillContentRow {
+  pill_id: number;
+  generated_text: string | null;
 }
 
 export async function GET() {
   try {
     const supabase = await createClient();
 
-    // 1. Verificar sesión del usuario
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
     if (authError || !user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    // 2. Historial de píldoras ya vistas por este usuario
-    const { data: seenData } = await supabase
+    const { data: seenData, error: seenError } = await supabase
       .from('user_progress')
       .select('pill_id')
       .eq('user_id', user.id);
 
-    const seenIds = seenData?.map((r) => r.pill_id) ?? [];
-
-    // 3. Consultar píldoras disponibles (excluyendo vistas)
-    let query = supabase.from('pills').select('*');
-    if (seenIds.length > 0) {
-      query = query.not('id', 'in', `(${seenIds.join(',')})`);
+    if (seenError) {
+      throw new Error(`No se pudo leer user_progress: ${seenError.message}`);
     }
-    const { data: availablePills } = await query.limit(10);
 
-    if (!availablePills || availablePills.length === 0) {
+    const seenIds = seenData?.map((row) => row.pill_id) ?? [];
+
+    let readyQuery = supabase
+      .from('pill_contents')
+      .select('pill_id,generated_text')
+      .eq('status', 'ready')
+      .not('generated_text', 'is', null);
+
+    if (seenIds.length > 0) {
+      readyQuery = readyQuery.not('pill_id', 'in', `(${seenIds.join(',')})`);
+    }
+
+    const { data: availableContents, error: availableError } = await readyQuery;
+
+    if (availableError) {
+      throw new Error(`No se pudo leer pill_contents: ${availableError.message}`);
+    }
+
+    const readyContents = (availableContents ?? []) as ReadyPillContentRow[];
+
+    if (readyContents.length === 0) {
       return NextResponse.json(
-        { error: '¡Increíble! Has completado todas las píldoras disponibles por ahora.' },
+        { error: 'Increible! Has completado todas las pildoras disponibles por ahora.' },
         { status: 404 }
       );
     }
 
-    // 4. Elegir una al azar
-    const selected = availablePills[Math.floor(Math.random() * availablePills.length)];
+    const selectedContent = readyContents[Math.floor(Math.random() * readyContents.length)];
 
-    // 5. Registrar como vista
-    await supabase.from('user_progress').insert({
+    const { data: selectedPill, error: pillError } = await supabase
+      .from('pills')
+      .select('id,title,content,category')
+      .eq('id', selectedContent.pill_id)
+      .maybeSingle();
+
+    if (pillError) {
+      throw new Error(`No se pudo leer la pildora: ${pillError.message}`);
+    }
+
+    if (!selectedPill) {
+      throw new Error(`No existe la pildora base para pill_id=${selectedContent.pill_id}`);
+    }
+
+    const { error: progressError } = await supabase.from('user_progress').insert({
       user_id: user.id,
-      pill_id: selected.id,
+      pill_id: selectedPill.id,
     });
 
-    // 6. Generar texto con Gemini
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
-    const prompt = buildPrompt(selected.category, selected.title, selected.content);
-    const result = await model.generateContent(prompt);
-    const generatedText = result.response.text();
+    if (progressError) {
+      throw new Error(`No se pudo guardar user_progress: ${progressError.message}`);
+    }
+
+    const pill = selectedPill as PillRow;
 
     return NextResponse.json({
-      pill_id: selected.id,
-      topic: selected.category,
-      title: selected.title,
-      content: selected.content,
-      generated_text: generatedText,
-      remaining_pills: availablePills.length - 1,
+      pill_id: pill.id,
+      topic: pill.category,
+      title: pill.title,
+      content: pill.content,
+      generated_text: selectedContent.generated_text ?? '',
+      remaining_pills: readyContents.length - 1,
     });
   } catch (error) {
     console.error('[daily-pill] Error:', error);

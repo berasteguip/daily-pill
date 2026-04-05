@@ -34,7 +34,10 @@ interface PostBody {
   pill_id: number;
   conversation_id: string;
   message: string;
-  pill_generated_text?: string;
+}
+
+interface PillContentRow {
+  generated_text: string | null;
 }
 
 function parsePillId(raw: string | null): number | null {
@@ -131,6 +134,26 @@ async function fetchPill(supabase: Awaited<ReturnType<typeof createClient>>, pil
   }
 
   return (data as PillRow | null) ?? null;
+}
+
+async function fetchReadyPillContent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  pillId: number
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('pill_contents')
+    .select('generated_text')
+    .eq('pill_id', pillId)
+    .eq('status', 'ready')
+    .not('generated_text', 'is', null)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`No se pudo leer el contenido generado: ${error.message}`);
+  }
+
+  const generatedText = (data as PillContentRow | null)?.generated_text?.trim();
+  return generatedText || null;
 }
 
 async function fetchPreferences(
@@ -421,7 +444,6 @@ export async function POST(request: NextRequest) {
     const pillId = Number(body.pill_id);
     const conversationId = body.conversation_id?.trim();
     const message = body.message?.trim();
-    const generatedText = (body.pill_generated_text ?? '').trim();
 
     if (!Number.isInteger(pillId) || pillId <= 0) {
       return errorResponse('pill_id inválido.', 400);
@@ -473,6 +495,11 @@ export async function POST(request: NextRequest) {
     const pill = await fetchPill(supabase, pillId);
     if (!pill) {
       return errorResponse('Píldora no encontrada.', 404);
+    }
+
+    const generatedText = await fetchReadyPillContent(supabase, pillId);
+    if (!generatedText) {
+      return errorResponse('El contenido de esta pildora no esta disponible todavia.', 409);
     }
 
     const { error: userInsertError } = await supabase.from('chat_messages').insert({

@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { PILL_EMOJI } from '@/lib/branding';
 import { useRouter } from 'next/navigation';
@@ -43,19 +44,19 @@ type ChatSessions = Record<string, ChatMessage[]>;
 type ConversationMap = Record<string, string>;
 
 const CATEGORY_STYLES: Record<string, { label: string; emoji: string }> = {
-  history: { label: 'Historia', emoji: '📜' },
-  science_tech: { label: 'Ciencia y Tecnología', emoji: '🔬' },
-  art_culture: { label: 'Arte y Cultura', emoji: '🎨' },
-  nature: { label: 'Naturaleza', emoji: '🌿' },
-  geography: { label: 'Geografía', emoji: '🌍' },
-  politics_econ: { label: 'Política y Economía', emoji: '💰' },
-  sayings: { label: 'Refranes', emoji: '💬' },
+  history: { label: 'Historia', emoji: '\u{1F4DC}' },
+  science_tech: { label: 'Ciencia y Tecnología', emoji: '\u{1F52C}' },
+  art_culture: { label: 'Arte y Cultura', emoji: '\u{1F3A8}' },
+  nature: { label: 'Naturaleza', emoji: '\u{1F33F}' },
+  geography: { label: 'Geografía', emoji: '\u{1F30D}' },
+  politics_econ: { label: 'Política y Economía', emoji: '\u{1F4B0}' },
+  sayings: { label: 'Refranes', emoji: '\u{1F4AC}' },
 };
 
 const CHAT_FALLBACK_ERROR = 'No he podido responder ahora. Inténtalo de nuevo en unos segundos.';
 
 function getCategoryStyle(topic: string) {
-  return CATEGORY_STYLES[topic] ?? { label: topic, emoji: '💡' };
+  return CATEGORY_STYLES[topic] ?? { label: topic, emoji: '\u{1F4A1}' };
 }
 
 function getPillKey(pillId: PillId): string {
@@ -218,7 +219,6 @@ export default function Home() {
           pill_id: Number(pill.pill_id),
           conversation_id: conversationId,
           message: text,
-          pill_generated_text: pill.generated_text,
         }),
       });
 
@@ -373,7 +373,7 @@ export default function Home() {
       <div className="flex h-screen items-center justify-center bg-white font-sans text-gray-900">
         <div className="text-center">
           <div className="mb-4 animate-bounce text-4xl">{PILL_EMOJI}</div>
-          <p className="animate-pulse text-sm font-medium text-gray-500">Generando nueva píldora...</p>
+          <p className="animate-pulse text-sm font-medium text-gray-500">Cargando nueva pildora...</p>
         </div>
       </div>
     );
@@ -382,7 +382,7 @@ export default function Home() {
     return (
       <div className="flex h-screen items-center justify-center bg-white p-4 font-sans">
         <div className="max-w-sm text-center">
-          <div className="mb-4 text-4xl">{error.includes('completado') ? '🎉' : '⚠️'}</div>
+          <div className="mb-4 text-4xl">{error.includes('completado') ? '\u{1F389}' : '\u{26A0}\u{FE0F}'}</div>
           <h2 className="mb-2 text-xl font-bold text-gray-900">{error}</h2>
           {!error.includes('completado') && (
             <button
@@ -423,30 +423,43 @@ export default function Home() {
 
       <main className="flex flex-1 flex-col items-center justify-center px-4 py-12">
         <div className="mx-auto w-full max-w-2xl">
-          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-10 shadow-sm sm:px-8">
-            <div className="mb-6 flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-gray-500">
-              <span>{style.emoji}</span>
-              <span>{style.label}</span>
+          <div className="relative rounded-2xl border border-gray-200 bg-white px-4 pb-10 pt-12 shadow-sm sm:px-8 sm:pt-14">
+            <button
+              id="btn-next-pill"
+              type="button"
+              onClick={fetchPill}
+              className="absolute right-4 top-4 inline-flex h-[4.75rem] w-[4.75rem] items-center justify-center rounded-full transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 sm:right-6 sm:top-5"
+              aria-label="Cargar siguiente píldora"
+              title="Siguiente píldora"
+            >
+              <Image
+                src="/repeat-pill.svg"
+                alt=""
+                fill
+                priority
+                className="pointer-events-none object-contain"
+                aria-hidden="true"
+              />
+              <span className="relative z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-2xl shadow-sm">
+                {PILL_EMOJI}
+              </span>
+            </button>
+
+            <div className="pr-20 sm:pr-24">
+              <div className="mb-6 flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-gray-500">
+                <span>{style.emoji}</span>
+                <span>{style.label}</span>
+              </div>
+
+              <h1 className="mb-2 text-3xl font-bold leading-tight text-gray-900">{pill.title}</h1>
+
+              <h2 className="mb-8 text-base font-medium text-gray-500">{pill.content}</h2>
+
+              <div className="mb-8 h-1 w-12 rounded-full bg-gray-200" />
             </div>
-
-            <h1 className="mb-2 text-3xl font-bold leading-tight text-gray-900">{pill.title}</h1>
-
-            <h2 className="mb-8 text-base font-medium text-gray-500">{pill.content}</h2>
-
-            <div className="mb-8 h-1 w-12 rounded-full bg-gray-200" />
 
             <div className="prose prose-gray max-w-none text-justify text-lg leading-relaxed text-gray-800">
               <p>{pill.generated_text}</p>
-            </div>
-
-            <div className="mt-12 flex flex-col justify-center gap-3 border-t border-gray-100 pt-8 sm:flex-row">
-              <button
-                id="btn-next-pill"
-                onClick={fetchPill}
-                className="w-full rounded-lg bg-black px-8 py-3.5 text-base font-semibold text-white shadow-md transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 sm:w-auto"
-              >
-                Siguiente píldora
-              </button>
             </div>
           </div>
         </div>
@@ -485,3 +498,4 @@ export default function Home() {
     </div>
   );
 }
+
