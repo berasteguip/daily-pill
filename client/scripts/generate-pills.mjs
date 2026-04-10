@@ -10,15 +10,55 @@ const projectRoot = path.resolve(__dirname, '..');
 
 const DEFAULT_OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
 const DEFAULT_INTERVAL_MS = 3000;
-const DEFAULT_PROMPT_VERSION = 'v1';
+const DEFAULT_PROMPT_VERSION = 'v2';
+const DEFAULT_CORRECTION_ATTEMPTS = 2;
 const PAGE_SIZE = 100;
+const MIN_WORD_COUNT = 20;
+const MAX_WORD_COUNT = 75;
+
+const EMOJI_REGEX = /(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|\uFE0F)/u;
+const LEADING_LABEL_REGEX = /^\s*[A-Za-z][A-Za-z\s]{0,24}:\s*/u;
+const MARKDOWN_PATTERNS = [
+  {
+    regex: /[*_`]/u,
+    reason: 'No puede contener Markdown ni marcas de formato como asteriscos, guiones bajos o backticks.',
+  },
+  {
+    regex: /^\s{0,3}#{1,6}\s+/mu,
+    reason: 'No puede contener encabezados Markdown.',
+  },
+  {
+    regex: /^\s{0,3}>\s+/mu,
+    reason: 'No puede contener bloques de cita.',
+  },
+  {
+    regex: /^\s{0,3}[-*+]\s+/mu,
+    reason: 'No puede contener listas Markdown.',
+  },
+  {
+    regex: /^\s{0,3}\d+\.\s+/mu,
+    reason: 'No puede contener listas numeradas.',
+  },
+];
+
+const OUTPUT_RULES = [
+  `- Un unico parrafo, sin saltos de linea.`,
+  `- Solo texto plano.`,
+  `- Sin emojis, emoticonos ni simbolos decorativos.`,
+  `- Sin Markdown ni formato: nada de asteriscos, guiones bajos, backticks, encabezados, listas o citas.`,
+  `- Sin etiquetas ni apartados como "GANCHO:", "EXPLICACION:", "CIERRE:", "HOOK:" o equivalentes.`,
+  `- Sin saludos ni despedidas.`,
+  `- Entre ${MIN_WORD_COUNT} y ${MAX_WORD_COUNT} palabras.`,
+  `- Devuelve exclusivamente el texto final de la pildora.`,
+];
 
 function parseArgs(argv) {
   const options = {
     count: null,
     loop: false,
     intervalMs: DEFAULT_INTERVAL_MS,
-    retryFailed: true,
+    retryFailed: false,
+    revalidateReady: false,
     help: false,
   };
 
@@ -32,6 +72,11 @@ function parseArgs(argv) {
 
     if (arg === '--retry-failed') {
       options.retryFailed = true;
+      continue;
+    }
+
+    if (arg === '--revalidate-ready') {
+      options.revalidateReady = true;
       continue;
     }
 
@@ -81,12 +126,13 @@ function parseNonNegativeInt(rawValue, flagName) {
 
 function printHelp() {
   console.log(`Uso:
-  node scripts/generate-pills.mjs [--count N] [--loop] [--interval-ms N] [--retry-failed]
+  node scripts/generate-pills.mjs [--count N] [--loop] [--interval-ms N] [--retry-failed] [--revalidate-ready]
 
 Ejemplos:
   npm run pills:generate -- --count 10
   npm run pills:generate -- --count 20 --retry-failed
-  npm run pills:generate -- --loop --interval-ms 3000
+  npm run pills:generate -- --count 50 --revalidate-ready
+  npm run pills:generate -- --loop --interval-ms 3000 --retry-failed
   npm run pills:generate:loop
 `);
 }
@@ -181,7 +227,7 @@ async function verifyDatabaseShape(supabase) {
   }
 }
 
-async function fetchNextCandidate(supabase, retryFailed, attemptedIds) {
+async function fetchNextCandidate(supabase, options, attemptedIds) {
   let cursor = 0;
 
   while (true) {
@@ -203,23 +249,44 @@ async function fetchNextCandidate(supabase, retryFailed, attemptedIds) {
     const pillIds = pills.map((pill) => pill.id);
     const { data: contentRows, error: contentsError } = await supabase
       .from('pill_contents')
-      .select('pill_id,status')
+      .select('pill_id,status,generated_text')
       .in('pill_id', pillIds);
 
     if (contentsError) {
       throw new Error(`No se pudo leer public.pill_contents: ${contentsError.message}`);
     }
 
-    const statusByPillId = new Map((contentRows ?? []).map((row) => [row.pill_id, row.status]));
+    const contentByPillId = new Map((contentRows ?? []).map((row) => [row.pill_id, row]));
 
     for (const pill of pills) {
       if (attemptedIds.has(pill.id)) {
         continue;
       }
 
-      const status = statusByPillId.get(pill.id);
-      if (!status || (retryFailed && status === 'failed')) {
-        return pill;
+      const contentRow = contentByPillId.get(pill.id);
+
+      if (!contentRow) {
+        return {
+          pill,
+          mode: 'generate_pending',
+          existingContent: null,
+        };
+      }
+
+      if (options.retryFailed && contentRow.status === 'failed') {
+        return {
+          pill,
+          mode: 'retry_failed',
+          existingContent: contentRow,
+        };
+      }
+
+      if (options.revalidateReady && contentRow.status === 'ready') {
+        return {
+          pill,
+          mode: 'revalidate_ready',
+          existingContent: contentRow,
+        };
       }
     }
 
@@ -229,23 +296,49 @@ async function fetchNextCandidate(supabase, retryFailed, attemptedIds) {
 
 function buildPrompt(pill) {
   return `# ROL
-Actúa como un experto divulgador cultural.
+Actua como un experto divulgador cultural.
 
 # TAREA
-Redacta una "Píldora de Conocimiento Diaria" basada en:
+Redacta una "Pildora de Conocimiento Diaria" basada en:
 1. TEMA: ${pill.category}
-2. TÍTULO: ${pill.title}
-3. SUBTÍTULO: ${pill.content}
+2. TITULO: ${pill.title}
+3. SUBTITULO: ${pill.content}
 
-# INSTRUCCIONES
-- Gancho impactante.
-- Explicación ELI5 (sencilla).
-- Cierre reflexivo.
-- Máximo 75 palabras. Sin saludos.
-- IMPORTANTE: Escribe SOLO EN TEXTO PLANO. Prohibido usar Markdown, prohibido usar asteriscos (*), prohibido usar cursivas, negritas o subrayados.
+# OBJETIVO EDITORIAL
+- Empieza con un gancho impactante o contraintuitivo.
+- Explica el por que o el como de forma sencilla y rigurosa.
+- Cierra con una idea que deje curiosidad o reflexion.
+
+# REGLAS OBLIGATORIAS
+${OUTPUT_RULES.join('\n')}
 
 # OUTPUT
-Solo el texto de la píldora.`;
+Solo el texto final de la pildora.`;
+}
+
+function buildCorrectionPrompt(pill, invalidText, reasons) {
+  return `# ROL
+Actua como editor de calidad de un generador de pildoras de conocimiento.
+
+# TAREA
+Corrige el texto invalido para que cumpla todas las reglas formales y mantenga el tema original.
+
+# CONTEXTO
+TEMA: ${pill.category}
+TITULO: ${pill.title}
+SUBTITULO: ${pill.content}
+
+# INCUMPLIMIENTOS DETECTADOS
+${reasons.map((reason) => `- ${reason}`).join('\n')}
+
+# REGLAS OBLIGATORIAS
+${OUTPUT_RULES.join('\n')}
+
+# TEXTO INVALIDO
+${invalidText || '[vacio]'}
+
+# OUTPUT
+Devuelve solo la version corregida final.`;
 }
 
 async function generateWithOllama(config, prompt) {
@@ -279,27 +372,126 @@ async function generateWithOllama(config, prompt) {
   }
 
   const generated = typeof payload?.response === 'string' ? payload.response : '';
-  return normalizeGeneratedText(generated);
+  return sanitizeRawGeneratedText(generated);
+}
+
+function sanitizeRawGeneratedText(text) {
+  return String(text ?? '').replace(/\u00A0/gu, ' ').trim();
 }
 
 function normalizeGeneratedText(text) {
-  return text.replace(/\s+/gu, ' ').trim();
+  return sanitizeRawGeneratedText(text).replace(/\s+/gu, ' ').trim();
 }
 
 function validateGeneratedText(text) {
-  if (!text) {
-    throw new Error('La respuesta del modelo llego vacia.');
+  const rawText = sanitizeRawGeneratedText(text);
+  const normalizedText = normalizeGeneratedText(rawText);
+  const reasons = [];
+
+  if (!rawText) {
+    reasons.push('La respuesta del modelo llego vacia.');
   }
 
-  const wordCount = text.split(/\s+/u).filter(Boolean).length;
-
-  if (wordCount < 20) {
-    throw new Error(`La respuesta es demasiado corta (${wordCount} palabras).`);
+  if (/[\r\n]/u.test(rawText)) {
+    reasons.push('Debe ser un unico parrafo sin saltos de linea.');
   }
 
-  if (wordCount > 120) {
-    throw new Error(`La respuesta es demasiado larga (${wordCount} palabras).`);
+  if (EMOJI_REGEX.test(rawText)) {
+    reasons.push('No puede contener emojis, emoticonos ni pictogramas.');
   }
+
+  if (LEADING_LABEL_REGEX.test(rawText)) {
+    reasons.push('No puede empezar con una etiqueta o encabezado terminado en dos puntos.');
+  }
+
+  for (const pattern of MARKDOWN_PATTERNS) {
+    if (pattern.regex.test(rawText)) {
+      reasons.push(pattern.reason);
+    }
+  }
+
+  if (normalizedText) {
+    const wordCount = normalizedText.split(/\s+/u).filter(Boolean).length;
+
+    if (wordCount < MIN_WORD_COUNT) {
+      reasons.push(`La respuesta es demasiado corta (${wordCount} palabras).`);
+    }
+
+    if (wordCount > MAX_WORD_COUNT) {
+      reasons.push(`La respuesta es demasiado larga (${wordCount} palabras).`);
+    }
+
+    if (!/[A-Za-z0-9]/u.test(normalizedText)) {
+      reasons.push('Debe contener texto legible.');
+    }
+
+    return {
+      isValid: reasons.length === 0,
+      reasons,
+      rawText,
+      normalizedText,
+      wordCount,
+    };
+  }
+
+  return {
+    isValid: reasons.length === 0,
+    reasons,
+    rawText,
+    normalizedText,
+    wordCount: 0,
+  };
+}
+
+function buildValidationHistoryMessage(history) {
+  return history
+    .map((entry, index) => {
+      const stage = index === 0 ? 'validacion inicial' : `correccion ${index}`;
+      return `${stage}: ${entry.reasons.join(' | ')}`;
+    })
+    .join(' || ');
+}
+
+function createValidationError(history, lastAttemptText) {
+  const message = `No se pudo obtener una pildora valida tras ${DEFAULT_CORRECTION_ATTEMPTS} correcciones. ${buildValidationHistoryMessage(history)}`;
+  const error = new Error(message);
+  error.name = 'GeneratedTextValidationError';
+  error.lastAttemptText = lastAttemptText;
+  error.reasons = history[history.length - 1]?.reasons ?? [];
+  return error;
+}
+
+async function ensureValidGeneratedText(config, pill, initialText) {
+  let candidateText = sanitizeRawGeneratedText(initialText);
+  let validation = validateGeneratedText(candidateText);
+  const history = [validation];
+
+  if (validation.isValid) {
+    return {
+      text: validation.normalizedText,
+      wordCount: validation.wordCount,
+      corrected: false,
+      correctionAttempts: 0,
+    };
+  }
+
+  for (let attempt = 1; attempt <= DEFAULT_CORRECTION_ATTEMPTS; attempt += 1) {
+    const correctionPrompt = buildCorrectionPrompt(pill, candidateText, validation.reasons);
+    candidateText = await generateWithOllama(config, correctionPrompt);
+    validation = validateGeneratedText(candidateText);
+    history.push(validation);
+
+    if (validation.isValid) {
+      return {
+        text: validation.normalizedText,
+        wordCount: validation.wordCount,
+        corrected: true,
+        correctionAttempts: attempt,
+      };
+    }
+  }
+
+  throw createValidationError(history, candidateText);
 }
 
 async function saveReadyContent(supabase, pill, text, config) {
@@ -326,13 +518,13 @@ async function saveReadyContent(supabase, pill, text, config) {
   }
 }
 
-async function saveFailedContent(supabase, pill, errorMessage, config) {
+async function saveFailedContent(supabase, pill, errorMessage, config, lastAttemptText = null) {
   const timestamp = new Date().toISOString();
   const { error } = await supabase.from('pill_contents').upsert(
     {
       pill_id: pill.id,
       status: 'failed',
-      generated_text: null,
+      generated_text: lastAttemptText,
       generator: 'ollama',
       model: config.ollamaModel,
       prompt_version: config.promptVersion,
@@ -354,6 +546,18 @@ function formatLabel(pill) {
     .replace(/\s+/gu, ' ')
     .trim();
   return `#${pill.id}${compactTitle ? ` ${compactTitle}` : ''}`;
+}
+
+function formatMode(mode) {
+  if (mode === 'retry_failed') {
+    return 'retry_failed';
+  }
+
+  if (mode === 'revalidate_ready') {
+    return 'revalidate_ready';
+  }
+
+  return 'generate_pending';
 }
 
 function sleep(ms) {
@@ -379,7 +583,7 @@ async function run() {
   const supabase = createAdminClient(config);
 
   console.log(
-    `Iniciando generador batch con modelo=${config.ollamaModel}, prompt_version=${config.promptVersion}, loop=${options.loop}, retry_failed=${options.retryFailed}, max_attempts=${Number.isFinite(options.maxAttempts) ? options.maxAttempts : 'sin limite'}`
+    `Iniciando generador batch con modelo=${config.ollamaModel}, prompt_version=${config.promptVersion}, loop=${options.loop}, retry_failed=${options.retryFailed}, revalidate_ready=${options.revalidateReady}, max_attempts=${Number.isFinite(options.maxAttempts) ? options.maxAttempts : 'sin limite'}`
   );
 
   await verifyDatabaseShape(supabase);
@@ -402,36 +606,59 @@ async function run() {
     processed: 0,
     ready: 0,
     failed: 0,
+    corrected: 0,
+    unchanged: 0,
   };
   const attemptedIds = new Set();
 
   while (!stopRequested && stats.processed < options.maxAttempts) {
-    const pill = await fetchNextCandidate(supabase, options.retryFailed, attemptedIds);
+    const candidate = await fetchNextCandidate(supabase, options, attemptedIds);
 
-    if (!pill) {
+    if (!candidate) {
       console.log('No quedan pildoras pendientes para este modo de ejecucion.');
       break;
     }
 
+    const { pill, mode, existingContent } = candidate;
     stats.processed += 1;
     attemptedIds.add(pill.id);
     const label = formatLabel(pill);
-    console.log(`[${stats.processed}] Procesando ${label}`);
+    console.log(`[${stats.processed}] Procesando ${label} (${formatMode(mode)})`);
 
     try {
-      const prompt = buildPrompt(pill);
-      const generatedText = await generateWithOllama(config, prompt);
-      validateGeneratedText(generatedText);
-      await saveReadyContent(supabase, pill, generatedText, config);
+      const initialText =
+        mode === 'revalidate_ready'
+          ? existingContent?.generated_text ?? ''
+          : await generateWithOllama(config, buildPrompt(pill));
 
-      const wordCount = generatedText.split(/\s+/u).filter(Boolean).length;
-      stats.ready += 1;
-      console.log(`  ready: ${wordCount} palabras guardadas`);
+      const resolved = await ensureValidGeneratedText(config, pill, initialText);
+
+      if (mode === 'revalidate_ready' && !resolved.corrected) {
+        stats.unchanged += 1;
+        console.log(`  unchanged: contenido ready ya valido (${resolved.wordCount} palabras)`);
+      } else {
+        await saveReadyContent(supabase, pill, resolved.text, config);
+        stats.ready += 1;
+
+        if (resolved.corrected) {
+          stats.corrected += 1;
+          console.log(
+            `  ready: corregida y guardada (${resolved.wordCount} palabras, ${resolved.correctionAttempts} correcciones)`
+          );
+        } else {
+          console.log(`  ready: ${resolved.wordCount} palabras guardadas`);
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error desconocido';
+      const lastAttemptText =
+        error instanceof Error && 'lastAttemptText' in error
+          ? error.lastAttemptText
+          : existingContent?.generated_text ?? null;
+
       stats.failed += 1;
       console.error(`  failed: ${message}`);
-      await saveFailedContent(supabase, pill, message, config);
+      await saveFailedContent(supabase, pill, message, config, lastAttemptText);
     }
 
     if (stopRequested || stats.processed >= options.maxAttempts) {
@@ -443,7 +670,9 @@ async function run() {
     }
   }
 
-  console.log(`Resumen final: processed=${stats.processed}, ready=${stats.ready}, failed=${stats.failed}`);
+  console.log(
+    `Resumen final: processed=${stats.processed}, ready=${stats.ready}, failed=${stats.failed}, corrected=${stats.corrected}, unchanged=${stats.unchanged}`
+  );
 
   if (stats.failed > 0) {
     process.exitCode = 1;
