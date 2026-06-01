@@ -18,6 +18,14 @@ Variables principales:
 - `OLLAMA_MODEL`
 - `PILL_PROMPT_VERSION`
 
+## Supabase Auth redirects
+
+El registro envia el enlace de confirmacion a `/auth/callback` en el mismo origen desde el que el usuario se registra. En Supabase Dashboard, configura:
+
+- Authentication > URL Configuration > Site URL: URL publica de produccion, por ejemplo `https://tu-dominio.com`
+- Authentication > URL Configuration > Redirect URLs: `https://tu-dominio.com/auth/callback`
+- Para desarrollo local, anade tambien `http://localhost:3000/auth/callback`
+
 ## Frontend
 
 ```bash
